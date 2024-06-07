@@ -37,6 +37,17 @@
             <artifactId>ojdbc8</artifactId>
             <version>19.8.0.0</version>
         </dependency>
+        <!-- Dependencias de MongoDB -->
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+            <version>4.11.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-core</artifactId>
+            <version>4.11.2</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
