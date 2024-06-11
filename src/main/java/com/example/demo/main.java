@@ -18,6 +18,11 @@ public class main {
 	 */
 	public static void main(String[] args) throws SQLException {
 
+//menu
+
+
+
+
 		SpringApplication.run(main.class, args);
 
 		// Connection conexionOracle = conexionSQL.conectar();
@@ -30,11 +35,24 @@ public class main {
 		// objeto de almacen
 		// Almacen facturAlmacen1 = new Almacen("Matias", "arroz", 2100, 1);
 		// pruebasMongo
-		Banco cliente1 = new Banco("Jose", 9999999, "1234", 2);
-		MongoDatabase conexionDeMongo = ConexionMongo.conectarMongoDB();
-		MapeoMongo mapearMongo = new MapeoMongo(conexionDeMongo);
+		
+		Banco cliente1 = new Banco("Juan", 184942, "4321", 1);
+		//MongoDatabase conexionDeMongo = ConexionMongo.conectarMongoDB();
+		//MapeoMongo mapearMongo = new MapeoMongo(conexionDeMongo);
 		//mapearMongo.insertar(cliente1);
-		 mapearMongo.eliminar(Banco.class, 2);
+		// mapearMongo.eliminar(Banco.class, 1);
+		//mapearMongo.seleccionarPorId(Banco.class, 1);
+		//mapearMongo.modificar(cliente1);
+Connection conetarMySQL = ConexionMySQL.conectarMySQL();
+MapeoMySQL mapearMySQL = new MapeoMySQL(conetarMySQL);
+//mapearMySQL.insertar(cliente1);
+mapearMySQL.modificar(cliente1);
+
+
+
+
+
+
 
 		// mapeadorOracle.insertarTabla(facturAlmacen1);
 		// facturAlmacen1.setProducto("Frijoles");
@@ -42,6 +60,8 @@ public class main {
 		// mapeadorOracle.eliminarEntidad(Almacen.class,
 		// facturAlmacen1.getAlmacen_id());
 		// mapeadorOracle.modificarEntidad(facturAlmacen1);
+
+
 		System.out.println("jose");
 	}
 

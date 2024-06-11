@@ -1,41 +1,43 @@
 package com.example.demo;
-
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.lang.reflect.Field;
-import java.lang.reflect.Constructor;
+public class MapeoMySQL {
+    private Connection conexion;
 
-public class mapeo {
-
-    private Connection conn;
-
-    public mapeo(Connection conn) {
-        this.conn = conn;
+    public MapeoMySQL(Connection conexion) {
+        this.conexion = conexion;
     }
 
-    public void insertarTabla(Object objeto) {
+    public void insertar(Object objeto) {
         try {
             Class<?> clase = objeto.getClass();
-            String nombreTabla = clase.getSimpleName().toLowerCase(); 
+            String nombreTabla = clase.getSimpleName().toLowerCase(); // Suponemos que el nombre de la tabla es igual al nombre de la clase en minúsculas
             try {
+                // Crear tabla si no existe
                 crearTablaSiNoExiste(nombreTabla, clase);
             } catch (SQLException e) {
                 System.err.println("Error al crear la tabla: " + e.getMessage());
             }
 
+            // Insertar datos en la tabla
             insertarDatos(nombreTabla, clase, objeto);
         } catch (SQLException | IllegalAccessException e) {
-            System.err.println("Error al crear la clase a la tabla: " + e.getMessage());
+            System.err.println("Error al mapear la clase a la tabla: " + e.getMessage());
         }
     }
-
+    // El cambio es aca para manejar oracle y mysql
     private boolean tablaExiste(String nombreTabla) throws SQLException {
-        String query = "SELECT count(*) FROM user_tables WHERE table_name = ?";
-        try (PreparedStatement statement = conn.prepareStatement(query)) {
+        String query="";
+        if (conexion.getMetaData().getDatabaseProductName().toLowerCase().contains("mysql")){
+            query =  "SELECT count(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?";
+        }
+        try (PreparedStatement statement = conexion.prepareStatement(query)) {
             statement.setString(1, nombreTabla.toUpperCase());
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -64,7 +66,7 @@ public class mapeo {
             String nombreCampo = campo.getName();
             String tipoDato = obtenerTipoDato(campo.getType());
             query.append(nombreCampo).append(" ").append(tipoDato);
-            
+            // Verificar si es clave primaria (para que tenga llave primaria debe llamarse nombredelaclase_id, todo en minuscula)
             if (nombreCampo.equals(nombreTabla + "_id")) {
                 query.append(" PRIMARY KEY");
                 tieneClavePrimaria = true;
@@ -72,6 +74,7 @@ public class mapeo {
             query.append(", ");
         }
 
+        // Eliminar la coma y el espacio extra al final de la definición de la tabla
         query.delete(query.length() - 2, query.length());
         query.append(")");
 
@@ -79,7 +82,7 @@ public class mapeo {
             throw new SQLException("La tabla " + nombreTabla + " no tiene un campo clave primaria.");
         }
 
-        try (PreparedStatement statement = conn.prepareStatement(query.toString())) {
+        try (PreparedStatement statement = conexion.prepareStatement(query.toString())) {
             statement.executeUpdate();
             System.out.println("Tabla " + nombreTabla + " creada correctamente.");
         }
@@ -97,12 +100,11 @@ public class mapeo {
         } else if (tipo == boolean.class || tipo == Boolean.class) {
             return "BOOLEAN";
         } else {
-            return "VARCHAR(255)"; 
+            return "VARCHAR(255)"; // Por defecto, se considera como String
         }
     }
 
-    private void insertarDatos(String nombreTabla, Class<?> clase, Object objeto)
-            throws SQLException, IllegalAccessException {
+    private void insertarDatos(String nombreTabla, Class<?> clase, Object objeto) throws SQLException, IllegalAccessException {
         StringBuilder query = new StringBuilder("INSERT INTO ").append(nombreTabla).append(" (");
         StringBuilder values = new StringBuilder("VALUES (");
 
@@ -116,7 +118,7 @@ public class mapeo {
             values.append("'").append(valorCampo).append("', ");
         }
 
-      
+        // Eliminar la coma y el espacio extra al final de las listas de campos y valores
         query.delete(query.length() - 2, query.length());
         values.delete(values.length() - 2, values.length());
 
@@ -125,18 +127,21 @@ public class mapeo {
 
         String insertQuery = query.toString() + values.toString();
 
-        try (PreparedStatement statement = conn.prepareStatement(insertQuery)) {
+        try (PreparedStatement statement = conexion.prepareStatement(insertQuery)) {
             statement.executeUpdate();
             System.out.println("Datos insertados en la tabla " + nombreTabla + " correctamente.");
         }
     }
+    //==========================================================================
 
-    public <T> List<T> recuperarDeTabla(Class<T> clase) {
+    // CRUD SELECCIONAR ==========================================================================
+    // CRUD: SELECCIONAT TODOS LOS REGISTROS
+    public <T> List<T> seleccionarTodo(Class<T> clase) {
         List<T> resultados = new ArrayList<>();
-        String nombreTabla = clase.getSimpleName().toLowerCase(); 
+        String nombreTabla = clase.getSimpleName().toLowerCase(); // Derivar el nombre de la tabla del nombre de la clase
         try {
             String query = "SELECT * FROM " + nombreTabla;
-            try (PreparedStatement statement = conn.prepareStatement(query)) {
+            try (PreparedStatement statement = conexion.prepareStatement(query)) {
                 try (ResultSet resultSet = statement.executeQuery()) {
                     while (resultSet.next()) {
                         T instancia = construirInstancia(clase, resultSet);
@@ -149,7 +154,28 @@ public class mapeo {
         }
         return resultados;
     }
-
+    // CRUD: SELECCIONAR UN REGISTRO
+    public <T> T seleccionarPorId(Class<T> clase, Object id) {
+        String nombreTabla = clase.getSimpleName().toLowerCase();
+        String nombreCampoId = nombreTabla + "_id";
+    
+        String query = "SELECT * FROM " + nombreTabla + " WHERE " + nombreCampoId + " = ?";
+        try (PreparedStatement statement = conexion.prepareStatement(query)) {
+            statement.setObject(1, id);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return construirInstancia(clase, resultSet);
+                } else {
+                    System.out.println("No se encontró ningún registro con ID " + id + " en la tabla " + nombreTabla + ".");
+                    return null;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al seleccionar el registro con ID " + id + ": " + e.getMessage());
+            return null;
+        }
+    }
+    
     private <T> T construirInstancia(Class<T> clase, ResultSet resultSet) throws SQLException {
         try {
             Constructor<T> constructor = clase.getDeclaredConstructor();
@@ -163,7 +189,7 @@ public class mapeo {
                 Object valorCampo = resultSet.getObject(nombreCampo);
 
                 if (valorCampo != null) {
-
+                    // Convertir tipos si es necesario
                     if (campo.getType() == int.class || campo.getType() == Integer.class) {
                         valorCampo = ((Number) valorCampo).intValue();
                     } else if (campo.getType() == double.class || campo.getType() == Double.class) {
@@ -173,8 +199,7 @@ public class mapeo {
                     } else if (campo.getType() == long.class || campo.getType() == Long.class) {
                         valorCampo = ((Number) valorCampo).longValue();
                     } else if (campo.getType() == boolean.class || campo.getType() == Boolean.class) {
-                        valorCampo = (valorCampo instanceof Number) ? ((Number) valorCampo).intValue() != 0
-                                : Boolean.parseBoolean(valorCampo.toString());
+                        valorCampo = (valorCampo instanceof Number) ? ((Number) valorCampo).intValue() != 0 : Boolean.parseBoolean(valorCampo.toString());
                     }
 
                     campo.set(instancia, valorCampo);
@@ -183,24 +208,22 @@ public class mapeo {
 
             return instancia;
         } catch (NoSuchMethodException e) {
-            throw new SQLException("No se pudo encontrar el constructor predeterminado para la clase "
-                    + clase.getSimpleName() + ": " + e.getMessage(), e);
+            throw new SQLException("No se pudo encontrar el constructor predeterminado para la clase " + clase.getSimpleName() + ": " + e.getMessage(), e);
         } catch (InstantiationException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
             throw new SQLException("Error al instanciar la clase " + clase.getSimpleName() + ": " + e.getMessage(), e);
         }
     }
 
-    public void eliminarEntidad(Class<?> clase, int id) {
+    public void eliminar(Class<?> clase, Object id) {
         String nombreTabla = clase.getSimpleName().toLowerCase();
         String nombreCampoId = nombreTabla + "_id";
-
+    
         String query = "DELETE FROM " + nombreTabla + " WHERE " + nombreCampoId + " = ?";
-        try (PreparedStatement statement = conn.prepareStatement(query)) {
+        try (PreparedStatement statement = conexion.prepareStatement(query)) {
             statement.setObject(1, id);
             int filasAfectadas = statement.executeUpdate();
             if (filasAfectadas > 0) {
-                System.out
-                        .println("Registro con ID " + id + " eliminado correctamente de la tabla " + nombreTabla + ".");
+                System.out.println("Registro con ID " + id + " eliminado correctamente de la tabla " + nombreTabla + ".");
             } else {
                 System.out.println("No se encontró ningún registro con ID " + id + " en la tabla " + nombreTabla + ".");
             }
@@ -208,27 +231,26 @@ public class mapeo {
             System.err.println("Error al eliminar el registro con ID " + id + ": " + e.getMessage());
         }
     }
-
-    public void modificarEntidad(Object objeto) {
+    public void modificar(Object objeto) {
         try {
             Class<?> clase = objeto.getClass();
-            String nombreTabla = clase.getSimpleName().toLowerCase();
-
+            String nombreTabla = clase.getSimpleName().toLowerCase(); // Suponemos que el nombre de la tabla es igual al nombre de la clase en minúsculas
+            
+            // Verificar si la tabla existe en la BD
             if (!tablaExiste(nombreTabla)) {
                 System.err.println("La tabla " + nombreTabla + " no existe.");
                 return;
             }
-
+    //me permite moddificar los datos que ingresé
             modificarDatos(nombreTabla, clase, objeto);
         } catch (SQLException | IllegalAccessException e) {
             System.err.println("Error al modificar la clase en la tabla: " + e.getMessage());
         }
     }
-
-    private void modificarDatos(String nombreTabla, Class<?> clase, Object objeto)
-            throws SQLException, IllegalAccessException {
+    
+    private void modificarDatos(String nombreTabla, Class<?> clase, Object objeto) throws SQLException, IllegalAccessException {
         StringBuilder query = new StringBuilder("UPDATE ").append(nombreTabla).append(" SET ");
-
+    
         Field[] campos = clase.getDeclaredFields();
         String nombreCampoId = nombreTabla.toLowerCase() + "_id";
         boolean encontrado = false;
@@ -237,34 +259,32 @@ public class mapeo {
             String nombreCampo = campo.getName();
             if (nombreCampo.equals(nombreCampoId)) {
                 encontrado = true;
-                continue;
+                continue; 
             }
-
+    
             @SuppressWarnings("unused")
             Object valorCampo = campo.get(objeto);
             query.append(nombreCampo).append(" = ?, ");
         }
-
+    
         if (!encontrado) {
             throw new SQLException("No se encontró el campo ID en la clase " + clase.getSimpleName());
         }
-
         query.delete(query.length() - 2, query.length());
-
         query.append(" WHERE ").append(nombreCampoId).append(" = ?");
-
-        try (PreparedStatement statement = conn.prepareStatement(query.toString())) {
+    
+        try (PreparedStatement statement = conexion.prepareStatement(query.toString())) {
             int index = 1;
             for (Field campo : campos) {
                 String nombreCampo = campo.getName();
                 if (nombreCampo.equals(nombreCampoId)) {
-                    continue; // Saltar el campo ID
+                    continue; 
                 }
                 Object valorCampo = campo.get(objeto);
                 statement.setObject(index, valorCampo);
                 index++;
             }
-
+    
             Field idField;
             try {
                 idField = clase.getDeclaredField(nombreCampoId);
@@ -274,7 +294,7 @@ public class mapeo {
             } catch (NoSuchFieldException e) {
                 throw new SQLException("No se encontró el campo ID en la clase " + clase.getSimpleName());
             }
-
+    
             int filasAfectadas = statement.executeUpdate();
             if (filasAfectadas > 0) {
                 System.out.println("Datos modificados en la tabla " + nombreTabla + " correctamente.");
@@ -283,5 +303,4 @@ public class mapeo {
             }
         }
     }
-
 }

@@ -4,6 +4,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
+
 import org.bson.Document;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -119,5 +120,27 @@ public class MapeoMongo {
         }
 
         return instancia;
+    }
+    public void modificar(Object objeto) {
+        try {
+            Class<?> clase = objeto.getClass();
+            String nombreColeccion = clase.getSimpleName().toLowerCase();
+            MongoCollection<Document> coleccion = baseDeDatos.getCollection(nombreColeccion);
+
+            Document doc = convertirAJson(objeto, clase);
+            String idFieldName = clase.getSimpleName().toLowerCase() + "_id";
+            Field idField = clase.getDeclaredField(idFieldName);
+            idField.setAccessible(true);
+            Object id = idField.get(objeto);
+
+            if (id == null) {
+                throw new IllegalArgumentException("El campo ID no puede ser nulo");
+            }
+
+            coleccion.replaceOne(Filters.eq("_id", id), doc);
+            System.out.println("Documento actualizado en la colección " + nombreColeccion + " correctamente.");
+        } catch (Exception e) {
+            System.err.println("Error al actualizar el objeto en MongoDB: " + e.getMessage());
+        }
     }
 }
