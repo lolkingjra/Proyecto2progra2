@@ -79,7 +79,9 @@ public class MapeoMongo {
         try {
             Document documento = coleccion.find(consulta).first();
             if (documento != null) {
-                return construirInstancia(claseObjeto, documento);
+                T objeto = construirInstancia(claseObjeto, documento);
+                System.out.println("Documento actualizado en la colección " + nombreColeccion + " correctamente.");
+                return objeto;
             }
         } catch (Exception e) {
             System.err.println("Error al recuperar el objeto de la colección: " + e.getMessage());
